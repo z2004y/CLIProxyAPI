@@ -1,0 +1,71 @@
+name: imagiflow-build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'imagiflow/**'
+  pull_request:
+    paths:
+      - 'imagiflow/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build imagiflow (linux/${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: imagiflow/go/go.mod
+          cache: true
+
+      - name: Install arm64 cross C toolchain
+        if: matrix.goarch == 'arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build imagiflow.so (linux/${{ matrix.goarch }})
+        shell: bash
+        working-directory: imagiflow/go
+        env:
+          CGO_ENABLED: '1'
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          set -euo pipefail
+          if [[ "$GOARCH" == "arm64" ]]; then
+            export CC=aarch64-linux-gnu-gcc
+          fi
+          go build -buildvcs=false -buildmode=c-shared \
+            -ldflags "-X main.version=0.1.0" -o imagiflow.so .
+          rm -f imagiflow.h
+          file imagiflow.so || true
+
+      - name: Verify artifact exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "imagiflow/go/imagiflow.so"
+
+      - name: Upload imagiflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: imagiflow-linux-${{ matrix.goarch }}
+          path: imagiflow/go/imagiflow.so
+          if-no-files-found: error

@@ -1,0 +1,58 @@
+# ImagiFlow image-generation bridge — converts /v1/images/generations into
+# gemini-3.1-flash-image via /v1/chat/completions.
+#
+# Merge this block into your CPA config.yaml under `plugins.configs`.
+
+plugins:
+  configs:
+    imagiflow:
+      enabled: true
+      priority: 100
+
+      # Upstream chat/completions timeout in seconds.
+      timeout_seconds: 90
+
+      # Global defaults for all models (editable in the CPA web UI as dropdowns).
+      # Per-model values inside `models` override these when set.
+      image_from: ""       # auto | message_images | content_image | content_text | data ; empty = auto
+      response_format: ""  # url | b64_json ; empty = default behavior
+
+      # --- Multi-model mode (recommended) ------------------------------------
+      # Expose any number of image models on /v1/images/generations. Pick a
+      # model by name on the client side; each entry targets its own gateway.
+      #
+      # Different upstreams may return the generated image in different places
+      # of the chat/completions response. `image_from` tells this model where
+      # to look (defaults to "auto" when omitted):
+      #   auto           - message.images[].image_url.url, then content image_url data URLs
+      #   message_images - choices[0].message.images[].image_url.url only
+      #   content_image  - content array image_url parts only
+      #   content_text   - content array text parts, each treated as an image URL
+      #   data           - top-level data[] entries with url/b64_json
+      # `response_format` is the per-model default for url/b64_json, used when
+      # the client omits response_format.
+      models:
+        # 方式一(推荐):从已有认证路由,运行时自动取该认证的 base_url/api_key。
+        # 通过管理页的「图像模型管理」可从已有认证文件里点选模型自动生成本条。
+        - model: gemini-3.1-flash-image
+          auth_index: "<已有认证的 auth_index>"
+          default_size: "1024x1024"
+          image_from: auto
+          response_format: "" # "url" 或 "b64_json";空 = 默认行为
+        # 方式二:直接指定网关接口(覆盖认证解析)。
+        # - model: gemini-3.1-flash-image
+        #   base_url: "http://8.137.16.163:8317/v1"
+        #   api_key: "721683736"
+        #   default_size: "1024x1024"
+        #   image_from: content_text
+        #   response_format: url
+
+      # --- Legacy single-model mode (optional; overrides a default entry) ----
+      # When `models` is empty, these fields define the single exposed model:
+      # model: gemini-3.1-flash-image
+      # auth_index: ""            # optional; resolve base_url/api_key at runtime
+      # base_url: "http://8.137.16.163:8317/v1"
+      # api_key: "721683736"
+      # default_size: "1024x1024"
+      # image_from: auto          # optional, same values as above
+      # response_format: ""       # optional, "url" or "b64_json"
